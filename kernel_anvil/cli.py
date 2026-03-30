@@ -340,13 +340,25 @@ def cmd_gguf_optimize(args):
         console.print(f"[red]GGUF file not found: {gguf_path}[/red]")
         sys.exit(1)
 
-    # Check GPU
-    if not torch.cuda.is_available():
+    # Check GPU (skip if --no-bench)
+    no_bench = getattr(args, "no_bench", False)
+    if not no_bench and not torch.cuda.is_available():
         console.print("[red]No GPU available. gguf-optimize requires a CUDA/ROCm GPU.[/red]")
+        console.print("[dim]Troubleshooting:[/dim]")
+        console.print("[dim]  - Verify: python -c \"import torch; print(torch.cuda.is_available())\"[/dim]")
+        console.print("[dim]  - ROCm users need the ROCm-specific PyTorch wheel:[/dim]")
+        console.print("[dim]    pip install torch --index-url https://download.pytorch.org/whl/rocm7.1/[/dim]")
+        console.print("[dim]  - Windows ROCm: ensure torch is the ROCm build, not CPU/CUDA[/dim]")
+        console.print("[dim]  - Or use --no-bench to generate heuristic configs without GPU[/dim]")
         sys.exit(1)
 
-    gpu_spec = _get_gpu_spec()
-    device = torch.device("cuda")
+    if no_bench:
+        gpu_spec = GFX1100  # Default heuristics
+        device = None
+        console.print("[yellow]--no-bench: using heuristic configs (no GPU benchmarking)[/yellow]")
+    else:
+        gpu_spec = _get_gpu_spec()
+        device = torch.device("cuda")
 
     # Parse GGUF
     console.print(f"\n[bold]Parsing {gguf_path.name}...[/bold]")
@@ -363,42 +375,55 @@ def cmd_gguf_optimize(args):
         console.print("[yellow]No 2D weight tensors found in model.[/yellow]")
         sys.exit(0)
 
-    console.print(f"[bold]Tuning {len(shapes)} unique GEMV workloads...[/bold]\n")
-
-    # Tune each shape
     codegen_configs: dict[tuple[str, int, int], dict] = {}
     results_table = []
     total_t0 = time.monotonic()
 
-    for i, ((qt, n, k), count) in enumerate(sorted(shapes.items()), 1):
-        console.print(
-            f"  [{i}/{len(shapes)}] {qt} ({n}, {k}) x{count}...",
-            end=" ",
-        )
-        t0 = time.monotonic()
-        try:
-            cfg, baseline_us, speedup = _tune_shape_cli(
-                N=n,
-                K=k,
-                device=device,
-                gpu_spec=gpu_spec,
-                max_configs=args.max_configs,
-                warmup=args.warmup,
-                runs=args.runs,
-            )
-            dt = time.monotonic() - t0
-            speedup_str = f"{speedup:.2f}x" if speedup is not None else "-"
-            console.print(
-                f"nwarps={cfg['nwarps']} rows={cfg['rows_per_block']} "
-                f"({speedup_str}, {dt:.1f}s)"
-            )
+    if no_bench:
+        # Heuristic mode: assign configs based on shape analysis, no GPU needed
+        console.print(f"[bold]Generating heuristic configs for {len(shapes)} shapes...[/bold]\n")
+        for i, ((qt, n, k), count) in enumerate(sorted(shapes.items()), 1):
+            blocks_per_row = k // 256 if k >= 256 else 1
+            # Heuristic: fewer warps for small K (less sync overhead)
+            if blocks_per_row < 64:  # small_k
+                cfg = {"nwarps": 2, "rows_per_block": 2}
+            else:
+                cfg = {"nwarps": 4, "rows_per_block": 1}
             codegen_configs[(qt, n, k)] = cfg
-            results_table.append((qt, n, k, count, cfg, baseline_us, speedup, dt))
-        except Exception as e:
-            console.print(f"[red]FAILED: {e}[/red]")
-            # Use defaults on failure
-            codegen_configs[(qt, n, k)] = {"nwarps": 4, "rows_per_block": 1}
-            results_table.append((qt, n, k, count, {"nwarps": 4, "rows_per_block": 1}, 0, None, 0))
+            console.print(f"  [{i}/{len(shapes)}] {qt} ({n}, {k}) x{count}: "
+                          f"nwarps={cfg['nwarps']} rows={cfg['rows_per_block']} (heuristic)")
+            results_table.append((qt, n, k, count, cfg, 0, None, 0))
+    else:
+        console.print(f"[bold]Tuning {len(shapes)} unique GEMV workloads...[/bold]\n")
+
+        for i, ((qt, n, k), count) in enumerate(sorted(shapes.items()), 1):
+            console.print(
+                f"  [{i}/{len(shapes)}] {qt} ({n}, {k}) x{count}...",
+                end=" ",
+            )
+            t0 = time.monotonic()
+            try:
+                cfg, baseline_us, speedup = _tune_shape_cli(
+                    N=n,
+                    K=k,
+                    device=device,
+                    gpu_spec=gpu_spec,
+                    max_configs=args.max_configs,
+                    warmup=args.warmup,
+                    runs=args.runs,
+                )
+                dt = time.monotonic() - t0
+                speedup_str = f"{speedup:.2f}x" if speedup is not None else "-"
+                console.print(
+                    f"nwarps={cfg['nwarps']} rows={cfg['rows_per_block']} "
+                    f"({speedup_str}, {dt:.1f}s)"
+                )
+                codegen_configs[(qt, n, k)] = cfg
+                results_table.append((qt, n, k, count, cfg, baseline_us, speedup, dt))
+            except Exception as e:
+                console.print(f"[red]FAILED: {e}[/red]")
+                codegen_configs[(qt, n, k)] = {"nwarps": 4, "rows_per_block": 1}
+                results_table.append((qt, n, k, count, {"nwarps": 4, "rows_per_block": 1}, 0, None, 0))
 
     total_dt = time.monotonic() - total_t0
 
@@ -559,6 +584,7 @@ def main():
     p_gguf.add_argument("--max-configs", type=int, default=15, help="Max configs per shape (default: 15)")
     p_gguf.add_argument("--warmup", type=int, default=3, help="Warmup iterations (default: 3)")
     p_gguf.add_argument("--runs", type=int, default=5, help="Timed iterations (default: 5)")
+    p_gguf.add_argument("--no-bench", action="store_true", help="Skip GPU benchmarking, use heuristic configs (works without GPU)")
 
     # autoforge: generate, compile, benchmark shape-specific kernels
     p_forge = sub.add_parser("autoforge", help="Auto-generate optimized HIP kernels for a model")
