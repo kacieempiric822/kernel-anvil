@@ -50,7 +50,29 @@ class GpuSpec:
         return pct, factor
 
 
-# Known RDNA3 GPUs
+# RDNA 2
+GFX1030 = GpuSpec(
+    name="Radeon RX 6900 XT/6800 XT", gfx="gfx1030",
+    peak_bandwidth_gbs=512, cu_count=80, simds_per_cu=2,
+    max_waves_per_simd=10, vgpr_per_simd=1024, vgpr_granule=8,
+    lds_per_cu_bytes=65536, lds_granule_bytes=512, wave_size=32,
+)
+
+GFX1031 = GpuSpec(
+    name="Radeon RX 6800", gfx="gfx1031",
+    peak_bandwidth_gbs=512, cu_count=60, simds_per_cu=2,
+    max_waves_per_simd=10, vgpr_per_simd=1024, vgpr_granule=8,
+    lds_per_cu_bytes=65536, lds_granule_bytes=512, wave_size=32,
+)
+
+GFX1032 = GpuSpec(
+    name="Radeon RX 6700 XT", gfx="gfx1032",
+    peak_bandwidth_gbs=384, cu_count=40, simds_per_cu=2,
+    max_waves_per_simd=10, vgpr_per_simd=1024, vgpr_granule=8,
+    lds_per_cu_bytes=65536, lds_granule_bytes=512, wave_size=32,
+)
+
+# RDNA 3
 GFX1100 = GpuSpec(
     name="Radeon RX 7900 XTX", gfx="gfx1100",
     peak_bandwidth_gbs=960, cu_count=96, simds_per_cu=2,
@@ -111,6 +133,8 @@ GFX1202 = GpuSpec(
 )
 
 GPU_SPECS = {
+    # RDNA 2
+    "gfx1030": GFX1030, "gfx1031": GFX1031, "gfx1032": GFX1032,
     # RDNA 3
     "gfx1100": GFX1100, "gfx1101": GFX1101, "gfx1102": GFX1102,
     # RDNA 3.5
@@ -148,12 +172,19 @@ def detect_gpu() -> GpuSpec | None:
             if "strix point" in name or "gfx1151" in name:
                 return GFX1151
             # RDNA 3
-            if "7900 xtx" in name or "gfx1100" in name:
+            if "7900 xtx" in name or "gfx1100" in name or "radeon graphics" in name:
                 return GFX1100
             if "7900 xt" in name and "xtx" not in name:
                 return GFX1101
             if "7800" in name or "7700" in name or "gfx1102" in name:
                 return GFX1102
+            # RDNA 2
+            if "6900" in name or "6800 xt" in name or "gfx1030" in name:
+                return GFX1030
+            if "6800" in name and "xt" not in name or "gfx1031" in name:
+                return GFX1031
+            if "6700" in name or "6650" in name or "6600" in name or "gfx1032" in name:
+                return GFX1032
     except Exception:
         pass
     return None

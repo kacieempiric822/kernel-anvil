@@ -66,6 +66,8 @@ kernel-anvil profile examples/simple_gemv.py
 
 **End-to-end: 12 tok/s -> 27 tok/s decode (2.25x)**
 
+> **Note:** The 12 tok/s baseline was measured with [TurboQuant](https://github.com/TheTom/turboquant_plus) turbo3 KV cache compression enabled, which adds decode overhead. Stock llama.cpp without TurboQuant gets ~20 tok/s on this model. The 2.25x improvement is the combined effect of kernel-anvil's shape-specific tuning on top of TurboQuant's compressed KV path.
+
 ### Qwen3-8B Q4_K_M on 7900 XTX
 
 | Shape | Count | Speedup |
@@ -110,6 +112,7 @@ kernel-anvil gguf-optimize model.gguf
 
 | Family | GPUs | Status |
 |--------|------|--------|
+| RDNA 2 | RX 6900 XT, RX 6800 XT/6800, RX 6700 XT/6650/6600 | Supported |
 | RDNA 3 | RX 7900 XTX/XT, RX 7800 XT, RX 7700 XT | Tested |
 | RDNA 3.5 | Radeon AI 370/395 (Strix Halo), Strix Point | Supported |
 | RDNA 4 | RX 9070 XT, RX 9070, R9700 AI Pro (32GB) | Supported |
