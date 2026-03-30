@@ -474,6 +474,62 @@ def cmd_gguf_optimize(args):
         console.print(f"[dim]C header also written to {output_path}[/dim]")
 
 
+def cmd_autoforge(args):
+    """Auto-generate optimized HIP kernels for a model."""
+    from kernel_anvil.autoforge import autoforge
+
+    try:
+        nwarps = [int(x) for x in args.nwarps.split(",")]
+        rpb = [int(x) for x in args.rpb.split(",")]
+        if any(v <= 0 for v in nwarps + rpb):
+            raise ValueError("All values must be positive")
+    except ValueError as e:
+        console.print(f"[red]Invalid nwarps/rpb values: {e}[/red]")
+        sys.exit(1)
+
+    console.print(f"\n[bold]Autoforge: generating optimized kernels for {Path(args.gguf).name}[/bold]")
+    console.print(f"Sweeping nwarps={nwarps} x rpb={rpb} = {len(nwarps)*len(rpb)} configs per shape\n")
+
+    result = autoforge(
+        model_path=args.gguf,
+        arch=args.arch,
+        nwarps_candidates=nwarps,
+        rpb_candidates=rpb,
+        verbose=True,
+    )
+
+    if result.shapes:
+        console.print(f"\n[bold green]Done![/bold green]")
+        console.print(f"  Config: {result.kernel_pack_path}")
+        console.print(f"  Run: SMITHY_CONFIG={result.kernel_pack_path} llama-server -m {args.gguf} -ngl 999")
+
+
+def cmd_llama_sweep(args):
+    """Sweep actual llama.cpp MMVQ kernel configs via rocprofv3."""
+    from kernel_anvil.llama_sweep import sweep_model, write_optimal_config
+
+    nwarps = [int(x) for x in args.nwarps.split(",")]
+
+    console.print(f"\n[bold]Sweeping llama.cpp MMVQ kernels for {Path(args.gguf).name}[/bold]")
+    console.print(f"Candidate nwarps: {nwarps}")
+    console.print(f"This runs llama-bench {len(nwarps)+1} times with rocprofv3 tracing.\n")
+
+    result = sweep_model(
+        model_path=args.gguf,
+        llama_bench=args.llama_bench,
+        nwarps_candidates=nwarps,
+        verbose=True,
+    )
+
+    path = write_optimal_config(result)
+    console.print(f"\n[bold green]Optimal config written to {path}[/bold green]")
+    console.print(f"  Baseline: {result.baseline_tps:.2f} tok/s")
+    console.print(f"  Optimized: {result.optimized_tps:.2f} tok/s")
+    speedup = result.optimized_tps / result.baseline_tps if result.baseline_tps > 0 else 0
+    console.print(f"  Speedup: {speedup:.2f}x")
+    console.print(f"\n[dim]Run llama.cpp with: SMITHY_CONFIG={path} llama-server -m {args.gguf} -ngl 999[/dim]")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="kernel-anvil",
@@ -504,6 +560,19 @@ def main():
     p_gguf.add_argument("--warmup", type=int, default=3, help="Warmup iterations (default: 3)")
     p_gguf.add_argument("--runs", type=int, default=5, help="Timed iterations (default: 5)")
 
+    # autoforge: generate, compile, benchmark shape-specific kernels
+    p_forge = sub.add_parser("autoforge", help="Auto-generate optimized HIP kernels for a model")
+    p_forge.add_argument("gguf", help="Path to GGUF model file")
+    p_forge.add_argument("--arch", help="GPU arch (auto-detected if omitted)")
+    p_forge.add_argument("--nwarps", default="1,2,4,8", help="nwarps to sweep (default: 1,2,4,8)")
+    p_forge.add_argument("--rpb", default="1,2,4", help="rows_per_block to sweep (default: 1,2,4)")
+
+    # llama-sweep: sweep actual llama.cpp kernels via rocprofv3
+    p_llama = sub.add_parser("llama-sweep", help="Sweep llama.cpp MMVQ kernel configs on actual hardware")
+    p_llama.add_argument("gguf", help="Path to GGUF model file")
+    p_llama.add_argument("--llama-bench", help="Path to llama-bench binary")
+    p_llama.add_argument("--nwarps", default="1,2,4,8", help="Comma-separated nwarps to try (default: 1,2,4,8)")
+
     args = parser.parse_args()
     if args.command is None:
         parser.print_help()
@@ -515,6 +584,10 @@ def main():
         cmd_profile(args)
     elif args.command == "gguf-optimize":
         cmd_gguf_optimize(args)
+    elif args.command == "llama-sweep":
+        cmd_llama_sweep(args)
+    elif args.command == "autoforge":
+        cmd_autoforge(args)
 
 
 if __name__ == "__main__":
