@@ -553,10 +553,32 @@ def cmd_llama_sweep(args):
     console.print(f"\n[dim]Run llama.cpp with: SMITHY_CONFIG={path} llama-server -m {args.gguf} -ngl 999[/dim]")
 
 
+def cmd_compare(args):
+    """Compare ROCm vs Vulkan backend performance."""
+    from kernel_anvil.vulkan_sweep import compare_backends
+
+    console.print(f"\n[bold]Backend Comparison: ROCm vs Vulkan[/bold]")
+    console.print(f"Model: {Path(args.gguf).name}\n")
+
+    results = compare_backends(
+        model_path=args.gguf,
+        rocm_bench=args.rocm_bench,
+        vulkan_bench=args.vulkan_bench,
+        verbose=True,
+    )
+
+    if "comparison" in results:
+        rec = results["comparison"]["recommendation"]
+        if rec == "vulkan":
+            console.print(f"\n[bold green]Vulkan recommended for this workload.[/bold green]")
+        elif rec == "rocm":
+            console.print(f"\n[bold green]ROCm recommended for this workload.[/bold green]")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="kernel-anvil",
-        description="Profile-guided Triton kernel optimizer for AMD/RDNA3",
+        description="Profile-guided GPU kernel optimizer for AMD",
     )
     sub = parser.add_subparsers(dest="command")
 
@@ -597,6 +619,12 @@ def main():
     p_llama.add_argument("--llama-bench", help="Path to llama-bench binary")
     p_llama.add_argument("--nwarps", default="1,2,4,8", help="Comma-separated nwarps to try (default: 1,2,4,8)")
 
+    # compare: head-to-head ROCm vs Vulkan
+    p_compare = sub.add_parser("compare-backends", help="Compare ROCm vs Vulkan decode performance")
+    p_compare.add_argument("gguf", help="Path to GGUF model file")
+    p_compare.add_argument("--rocm-bench", help="Path to ROCm llama-bench binary")
+    p_compare.add_argument("--vulkan-bench", help="Path to Vulkan llama-bench binary")
+
     args = parser.parse_args()
     if args.command is None:
         parser.print_help()
@@ -612,6 +640,8 @@ def main():
         cmd_llama_sweep(args)
     elif args.command == "autoforge":
         cmd_autoforge(args)
+    elif args.command == "compare-backends":
+        cmd_compare(args)
 
 
 if __name__ == "__main__":
