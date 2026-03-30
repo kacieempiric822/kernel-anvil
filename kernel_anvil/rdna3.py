@@ -1,4 +1,7 @@
-"""RDNA3 hardware constants and optimization heuristics."""
+"""AMD GPU hardware constants and optimization heuristics.
+
+Supports RDNA3 (gfx1100/1101/1102), RDNA3.5 (gfx1150/1151), and RDNA4 (gfx1200/1201).
+"""
 from dataclasses import dataclass
 
 
@@ -69,7 +72,52 @@ GFX1102 = GpuSpec(
     lds_per_cu_bytes=98304, lds_granule_bytes=512, wave_size=32,
 )
 
-GPU_SPECS = {"gfx1100": GFX1100, "gfx1101": GFX1101, "gfx1102": GFX1102}
+# RDNA 3.5 (Strix Point / Strix Halo APUs)
+GFX1150 = GpuSpec(
+    name="Radeon AI 370/395 (Strix Halo)", gfx="gfx1150",
+    peak_bandwidth_gbs=256, cu_count=40, simds_per_cu=2,
+    max_waves_per_simd=10, vgpr_per_simd=1536, vgpr_granule=8,
+    lds_per_cu_bytes=98304, lds_granule_bytes=512, wave_size=32,
+)
+
+GFX1151 = GpuSpec(
+    name="Radeon (Strix Point)", gfx="gfx1151",
+    peak_bandwidth_gbs=120, cu_count=16, simds_per_cu=2,
+    max_waves_per_simd=10, vgpr_per_simd=1536, vgpr_granule=8,
+    lds_per_cu_bytes=98304, lds_granule_bytes=512, wave_size=32,
+)
+
+# RDNA 4
+GFX1200 = GpuSpec(
+    name="Radeon RX 9070 XT", gfx="gfx1200",
+    peak_bandwidth_gbs=608, cu_count=56, simds_per_cu=2,
+    max_waves_per_simd=10, vgpr_per_simd=1536, vgpr_granule=8,
+    lds_per_cu_bytes=98304, lds_granule_bytes=512, wave_size=32,
+)
+
+GFX1201 = GpuSpec(
+    name="Radeon RX 9070", gfx="gfx1201",
+    peak_bandwidth_gbs=608, cu_count=48, simds_per_cu=2,
+    max_waves_per_simd=10, vgpr_per_simd=1536, vgpr_granule=8,
+    lds_per_cu_bytes=98304, lds_granule_bytes=512, wave_size=32,
+)
+
+# RDNA 4 Pro (AI inference)
+GFX1202 = GpuSpec(
+    name="Radeon R9700 AI Pro", gfx="gfx1202",
+    peak_bandwidth_gbs=608, cu_count=56, simds_per_cu=2,
+    max_waves_per_simd=10, vgpr_per_simd=1536, vgpr_granule=8,
+    lds_per_cu_bytes=98304, lds_granule_bytes=512, wave_size=32,
+)
+
+GPU_SPECS = {
+    # RDNA 3
+    "gfx1100": GFX1100, "gfx1101": GFX1101, "gfx1102": GFX1102,
+    # RDNA 3.5
+    "gfx1150": GFX1150, "gfx1151": GFX1151,
+    # RDNA 4
+    "gfx1200": GFX1200, "gfx1201": GFX1201, "gfx1202": GFX1202,
+}
 
 
 def detect_gpu() -> GpuSpec | None:
@@ -87,11 +135,24 @@ def detect_gpu() -> GpuSpec | None:
         import torch
         if torch.cuda.is_available():
             name = torch.cuda.get_device_name(0).lower()
+            # RDNA 4
+            if "9070 xt" in name or "gfx1200" in name:
+                return GFX1200
+            if "r9700" in name or "9700 ai" in name or "gfx1202" in name:
+                return GFX1202
+            if "9070" in name or "gfx1201" in name:
+                return GFX1201
+            # RDNA 3.5
+            if "strix halo" in name or "ai 395" in name or "ai 370" in name or "gfx1150" in name:
+                return GFX1150
+            if "strix point" in name or "gfx1151" in name:
+                return GFX1151
+            # RDNA 3
             if "7900 xtx" in name or "gfx1100" in name:
                 return GFX1100
             if "7900 xt" in name and "xtx" not in name:
                 return GFX1101
-            if "7800" in name:
+            if "7800" in name or "7700" in name or "gfx1102" in name:
                 return GFX1102
     except Exception:
         pass

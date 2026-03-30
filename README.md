@@ -106,6 +106,16 @@ kernel-anvil gguf-optimize model.gguf
 | register_spill | scratch > 0 | Smaller blocks |
 | compute_bound | Low BW, high occupancy | Larger blocks, more warps |
 
+## Supported GPUs
+
+| Family | GPUs | Status |
+|--------|------|--------|
+| RDNA 3 | RX 7900 XTX/XT, RX 7800 XT, RX 7700 XT | Tested |
+| RDNA 3.5 | Radeon AI 370/395 (Strix Halo), Strix Point | Supported |
+| RDNA 4 | RX 9070 XT, RX 9070, R9700 AI Pro (32GB) | Supported |
+
+The profiling + sweep runs on any GPU that supports PyTorch + Triton. Hardware specs for occupancy analysis are built-in for all listed GPUs.
+
 ## Limitations
 
 - **AMD only** (CUDA/Metal support planned)
