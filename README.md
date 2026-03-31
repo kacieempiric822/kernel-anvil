@@ -78,15 +78,41 @@ kernel-anvil profile examples/simple_gemv.py
 | Q6_K 4096x1024 | 18 | **2.10x** |
 | Q4_K 4096x4096 | 72 | **1.21x** |
 
-## llama.cpp Patch
+## llama.cpp Integration
 
-A ~50 line patch to `mmvq.cu` adds runtime shape-specific config loading:
+A small patch (~15 lines + config loader header) lets llama.cpp load kernel-anvil configs at runtime.
 
-1. `smithy-config.h` -- config struct + JSON loader, lazy-loads on first kernel dispatch
-2. `smithy_lookup()` in `calc_launch_params()` -- overrides nwarps/rows_per_block per shape
-3. Falls back to existing defaults when no config exists
+### Apply the patch
 
-Branch: `smithy-shape-configs` in the llama.cpp fork.
+```bash
+cd kernel-anvil/patches
+./apply.sh /path/to/your/llama.cpp
+```
+
+Or manually: copy `patches/smithy-config.h` into `ggml/src/ggml-cuda/` and apply the two small edits described in `patches/README.md`.
+
+### Rebuild llama.cpp
+
+```bash
+cd /path/to/llama.cpp
+cmake -B build -DGGML_HIP=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j$(nproc)
+```
+
+### Run with optimized configs
+
+```bash
+kernel-anvil gguf-optimize model.gguf
+SMITHY_CONFIG=~/.cache/smithy/model.json \
+    ./build/bin/llama-server -m model.gguf -ngl 999
+```
+
+On startup you'll see:
+```
+kernel-anvil: loaded 6 shape configs from ~/.cache/smithy/model.json
+```
+
+Without a config file, behavior is identical to stock llama.cpp.
 
 ## Architecture
 

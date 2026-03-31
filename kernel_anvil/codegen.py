@@ -27,8 +27,9 @@ GGML_TYPE_MAP = {
     "IQ2_XXS": 16, "IQ2_XS": 17, "IQ3_XXS": 18, "IQ1_S": 19, "IQ4_NL": 20,
     "IQ3_S": 21, "IQ2_S": 22, "IQ4_XS": 23, "IQ1_M": 24,
     "BF16": 30,
+    "MXFP4": 39, "NVFP4": 40,
 }
-GGML_TYPE_COUNT = 44
+GGML_TYPE_COUNT = 41  # must match ggml.h GGML_TYPE_COUNT
 
 @dataclass(frozen=True)
 class ShapeConfig:

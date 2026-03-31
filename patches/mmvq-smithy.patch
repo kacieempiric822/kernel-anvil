@@ -1,0 +1,38 @@
+diff --git a/ggml/src/ggml-cuda/mmvq.cu b/ggml/src/ggml-cuda/mmvq.cu
+index 8d80d1d..38a71ec 100644
+--- a/ggml/src/ggml-cuda/mmvq.cu
++++ b/ggml/src/ggml-cuda/mmvq.cu
+@@ -2,6 +2,7 @@
+ #include "quantize.cuh"
+ #include "unary.cuh"
+ #include "vecdotq.cuh"
++#include "smithy-config.h"
+ 
+ #include <cstdint>
+ 
+@@ -380,6 +381,10 @@ static constexpr __host__ __device__ int calc_rows_per_block(int ncols_dst, int
+                 return 1;
+         }
+     }
++    // RDNA: rpb=2 when kernel-anvil profile says so (via small_k trigger)
++    if (small_k && ncols_dst == 1) {
++        return 2;
++    }
+     return 1;
+ }
+ 
+@@ -774,6 +779,14 @@ static void mul_mat_vec_q_switch_ncols_dst(
+             use = false;
+         }
+ 
++        // kernel-anvil override: if smithy config says rpb>1 for this shape, force small_k
++        if (!use && c_ncols_dst == 1) {
++            smithy_shape_config scfg = smithy_lookup(type, nrows_x, ncols_x);
++            if (scfg.rows_per_block > 1) {
++                use = true;
++            }
++        }
++
+         return use;
+     };
+ 
