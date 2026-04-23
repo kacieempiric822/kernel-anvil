@@ -10,7 +10,8 @@ license = "Apache-2.0"
 requires-python = ">=3.10"
 dependencies = [
     "torch>=2.0",
-    "triton>=3.0",
+    "triton>=3.0; platform_system != 'Windows'",
+    "triton-windows>=3.0; platform_system == 'Windows'",
     "rich>=13.0",
     "gguf>=0.6.0",
 ]

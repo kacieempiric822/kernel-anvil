@@ -24,7 +24,9 @@ cd kernel-anvil && pip install -e ".[dev]"
 
 Requires: Python 3.10+, PyTorch 2.0+ (with ROCm), Triton 3.0+
 
-> **ROCm Triton note:** If `pip install` fails on the Triton dependency, install the ROCm-compatible Triton wheel from [PyTorch's index](https://download.pytorch.org/whl/rocm7.1/): `pip install triton --index-url https://download.pytorch.org/whl/rocm7.1/`
+> **ROCm Triton note:** If `pip install` fails on the Triton dependency on Linux, install the ROCm-compatible Triton wheel from [PyTorch's index](https://download.pytorch.org/whl/rocm7.1/): `pip install triton --index-url https://download.pytorch.org/whl/rocm7.1/`
+>
+> **Windows note:** Upstream `triton` has no Windows wheels. The install metadata automatically selects [`triton-windows`](https://pypi.org/project/triton-windows/) on Windows, so `pip install -e ".[dev]"` should work out of the box. If you pinned Triton manually before this change, `pip uninstall triton triton-windows` and reinstall.
 
 ## Usage
 
